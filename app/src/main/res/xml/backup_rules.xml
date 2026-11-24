@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exclut explicitement les préférences chiffrées / secrets de toute sauvegarde cloud -->
+<full-backup-content>
+    <exclude domain="file" path="datastore/" />
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>

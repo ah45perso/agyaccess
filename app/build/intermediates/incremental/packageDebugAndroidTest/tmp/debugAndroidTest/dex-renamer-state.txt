@@ -1,0 +1,10 @@
+#Tue Nov 24 12:41:53 CET 2026
+base.0=/home/aylanh45/Bureau/agyaccess/app/build/intermediates/dex/debugAndroidTest/mergeExtDexDebugAndroidTest/classes.dex
+base.1=/home/aylanh45/Bureau/agyaccess/app/build/intermediates/dex/debugAndroidTest/mergeProjectDexDebugAndroidTest/0/classes.dex
+base.2=/home/aylanh45/Bureau/agyaccess/app/build/intermediates/dex/debugAndroidTest/mergeProjectDexDebugAndroidTest/13/classes.dex
+path.0=classes.dex
+path.1=0/classes.dex
+path.2=13/classes.dex
+renamed.0=classes.dex
+renamed.1=classes2.dex
+renamed.2=classes3.dex

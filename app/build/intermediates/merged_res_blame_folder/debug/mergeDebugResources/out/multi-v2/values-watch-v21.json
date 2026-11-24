@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.agyaccess.app-mergeDebugResources-65:/values-watch-v21/values-watch-v21.xml",
+            "map": [
+                {
+                    "source": "/home/aylanh45/.gradle/caches/9.6.0/transforms/51ab1f204c83b9c88df666439af8bb60/transformed/appcompat-1.2.0/res/values-watch-v21/values-watch-v21.xml",
+                    "from": {
+                        "startLines": "2,6,10",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "55,271,499",
+                        "endLines": "5,9,13",
+                        "endColumns": "12,12,12",
+                        "endOffsets": "266,494,724"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,1 @@
+-keep,allowobfuscation,allowshrinking class com.agyaccess.app.presentation.chat.ChatViewModel
