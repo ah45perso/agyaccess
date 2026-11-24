@@ -1,25 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Configuration stricte de sécurité réseau (OWASP Mobile Top 10) :
-  - Interdit formellement tout trafic HTTP en clair (cleartextTrafficPermitted="false").
-  - N'accepte par défaut que les autorités de certification système.
-  - Configuration de domaine dédiée pour le nœud Tailscale.
--->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
+            <certificates src="user" />
+            <certificates src="@raw/server_cert" />
         </trust-anchors>
     </base-config>
-
-    <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">ah-serv-opti.tail7f574d.ts.net</domain>
-        <domain includeSubdomains="false">ah-serv-opti</domain>
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-        <pin-set>
-            <pin digest="SHA-256">kz0TBpW+fCDYd/Oou8RhYQnI8hqrw41D4HRqQSc1THQ=</pin>
-        </pin-set>
-    </domain-config>
 </network-security-config>

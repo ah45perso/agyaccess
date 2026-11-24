@@ -35,6 +35,7 @@ data class NasConfig(
     companion object {
         const val DEFAULT_BASE_URL = "https://100.101.127.39:8844"
         const val DEFAULT_PIN = "sha256/kz0TBpW+fCDYd/Oou8RhYQnI8hqrw41D4HRqQSc1THQ="
+        const val DEFAULT_CERT_HEX = "30:87:c0:2c:19:b7:1d:8f:31:18:52:0c:9a:06:4c:d5:04:b6:61:24:1b:91:8c:3b:e3:60:c3:b9:03:f8:a7:fb"
 
         private val SHA256_BASE64_PIN_REGEX = Regex("^(sha256/)?[A-Za-z0-9+/=]{43,44}$")
         private val SHA256_HEX_PIN_REGEX = Regex("^(([0-9a-fA-F]{2}:){31}[0-9a-fA-F]{2}|[0-9a-fA-F]{64})$")
