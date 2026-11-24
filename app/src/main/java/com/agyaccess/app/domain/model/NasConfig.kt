@@ -7,29 +7,35 @@ import java.net.URI
  * Stockée chiffrée via Android Keystore (AES-256-GCM).
  */
 data class NasConfig(
-    val baseUrl: String = "",
+    val baseUrl: String = DEFAULT_BASE_URL,
     val apiToken: String = "",
     /** Empreintes publiques TLS au format `sha256/BASE64...` ou hexadécimal (Certificate Pinning). */
-    val certificatePins: List<String> = emptyList(),
+    val certificatePins: List<String> = listOf(DEFAULT_PIN),
     /** En-tête optionnel d'authentification mutuelle / reverse-proxy (ex: X-Client-Cert-Token). */
     val mutualAuthHeaderName: String = "",
     val mutualAuthHeaderValue: String = "",
-    val requireBiometricOnLaunch: Boolean = true,
-    val requireBiometricForSensitivePrompts: Boolean = true
+    val requireBiometricOnLaunch: Boolean = false,
+    val requireBiometricForSensitivePrompts: Boolean = false
 ) {
     val isConfigured: Boolean
-        get() = isValidHttpsUrl(baseUrl) && apiToken.isNotBlank()
+        get() = isValidHttpsUrl(effectiveBaseUrl())
+
+    fun effectiveBaseUrl(): String =
+        if (isValidHttpsUrl(baseUrl)) baseUrl.trim() else DEFAULT_BASE_URL
 
     fun normalizedBaseUrl(): String {
-        val trimmed = baseUrl.trim().trimEnd('/')
+        val trimmed = effectiveBaseUrl().trimEnd('/')
         return "$trimmed/"
     }
 
     fun extractHost(): String? = runCatching {
-        URI(baseUrl.trim()).host
+        URI(effectiveBaseUrl()).host
     }.getOrNull()
 
     companion object {
+        const val DEFAULT_BASE_URL = "https://100.101.127.39:8844"
+        const val DEFAULT_PIN = "sha256/kz0TBpW+fCDYd/Oou8RhYQnI8hqrw41D4HRqQSc1THQ="
+
         private val SHA256_BASE64_PIN_REGEX = Regex("^(sha256/)?[A-Za-z0-9+/=]{43,44}$")
         private val SHA256_HEX_PIN_REGEX = Regex("^(([0-9a-fA-F]{2}:){31}[0-9a-fA-F]{2}|[0-9a-fA-F]{64})$")
 

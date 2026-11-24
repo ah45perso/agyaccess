@@ -21,11 +21,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Stockage persistant chiffré de la configuration NAS (URL, API Key/JWT, pins TLS,
- * en-tête d'authentification mutuelle et politique biométrique).
- *
- * Toutes les valeurs sensibles sont chiffrées via [KeystoreCryptoManager] (AES-256-GCM
- * Hardware Keystore) avant d'être écrites dans Jetpack DataStore.
+ * Stockage persistant chiffré de la configuration NAS.
+ * Pré-configuré avec l'accès Tailscale natif 1-Click.
  */
 @Singleton
 class SecureConfigStorage @Inject constructor(
@@ -36,7 +33,6 @@ class SecureConfigStorage @Inject constructor(
 ) {
     private val _cachedConfig = MutableStateFlow(NasConfig())
 
-    /** Snapshot mémoire synchronisé pour lecture non bloquante dans les intercepteurs OkHttp. */
     val currentConfig: StateFlow<NasConfig> = _cachedConfig.asStateFlow()
 
     val configFlow: Flow<NasConfig> = dataStore.data.map { prefs ->
@@ -58,16 +54,17 @@ class SecureConfigStorage @Inject constructor(
     }
 
     suspend fun saveConfig(config: NasConfig): Result<Unit> = runCatching {
-        require(config.baseUrl.isBlank() || NasConfig.isValidHttpsUrl(config.baseUrl)) {
-            "L'URL du NAS doit impérativement utiliser HTTPS (ex: https://agy.mon-nas.local)."
+        val targetUrl = config.effectiveBaseUrl()
+        require(NasConfig.isValidHttpsUrl(targetUrl)) {
+            "L'URL du NAS doit impérativement utiliser HTTPS."
         }
         config.certificatePins.forEach { pin ->
             require(NasConfig.isValidPin(pin)) {
-                "Empreinte Certificate Pin invalide : '$pin' (format attendu: sha256/BASE64)."
+                "Empreinte Certificate Pin invalide : '$pin'"
             }
         }
 
-        val encryptedUrl = cryptoManager.encrypt(config.baseUrl.trim().trimEnd('/'))
+        val encryptedUrl = cryptoManager.encrypt(targetUrl.trimEnd('/'))
         val encryptedToken = cryptoManager.encrypt(config.apiToken.trim())
         val encryptedPins = cryptoManager.encrypt(json.encodeToString(config.certificatePins))
         val encryptedMutualName = cryptoManager.encrypt(config.mutualAuthHeaderName.trim())
@@ -91,12 +88,13 @@ class SecureConfigStorage @Inject constructor(
     }
 
     private fun decodePreferences(prefs: Preferences): NasConfig {
-        val url = decryptSafe(prefs[KEY_NAS_URL_ENC])
+        val rawUrl = decryptSafe(prefs[KEY_NAS_URL_ENC])
+        val url = rawUrl.ifBlank { NasConfig.DEFAULT_BASE_URL }
         val token = decryptSafe(prefs[KEY_API_TOKEN_ENC])
         val pinsJson = decryptSafe(prefs[KEY_CERT_PINS_ENC])
         val pins = runCatching {
-            if (pinsJson.isBlank()) emptyList() else json.decodeFromString<List<String>>(pinsJson)
-        }.getOrDefault(emptyList())
+            if (pinsJson.isBlank()) listOf(NasConfig.DEFAULT_PIN) else json.decodeFromString<List<String>>(pinsJson)
+        }.getOrDefault(listOf(NasConfig.DEFAULT_PIN))
         val mutualName = decryptSafe(prefs[KEY_MUTUAL_HEADER_NAME_ENC])
         val mutualValue = decryptSafe(prefs[KEY_MUTUAL_HEADER_VALUE_ENC])
 
@@ -106,8 +104,8 @@ class SecureConfigStorage @Inject constructor(
             certificatePins = pins,
             mutualAuthHeaderName = mutualName,
             mutualAuthHeaderValue = mutualValue,
-            requireBiometricOnLaunch = prefs[KEY_BIOMETRIC_ON_LAUNCH] ?: true,
-            requireBiometricForSensitivePrompts = prefs[KEY_BIOMETRIC_SENSITIVE_PROMPT] ?: true
+            requireBiometricOnLaunch = prefs[KEY_BIOMETRIC_ON_LAUNCH] ?: false,
+            requireBiometricForSensitivePrompts = prefs[KEY_BIOMETRIC_SENSITIVE_PROMPT] ?: false
         )
     }
 

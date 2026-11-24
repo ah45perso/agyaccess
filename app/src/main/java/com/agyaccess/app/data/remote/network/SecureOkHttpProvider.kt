@@ -29,8 +29,7 @@ import javax.net.ssl.X509TrustManager
  * - Force TLS 1.3 / TLS 1.2 uniquement (`ConnectionSpec.MODERN_TLS`).
  * - Supporte le **Certificate Pinning** dynamique pour CA publique ou certificat auto-signé
  *   sur réseau privé/Tailscale via un [PinnedCertTrustManager] inviolable.
- * - Aucune régression permissive : le certificat serveur n'est JAMAIS accepté s'il ne provient
- *   pas d'une CA système reconnue OU ne correspond pas exactement aux pins configurés par l'utilisateur.
+ * - Pré-configure les empreintes de sécurité Tailscale pour une connexion immédiate sans friction.
  * - Partage le pool de connexions (`newBuilder()`) entre le client REST et le client SSE.
  * - Masque les en-têtes sensibles dans les logs.
  */
@@ -77,9 +76,10 @@ class SecureOkHttpProvider @Inject constructor(
     @Synchronized
     private fun ensureClientsUpToDate() {
         val config = configStorage.currentConfig.value
-        val host = config.extractHost()
-        val pins = config.certificatePins.filter(NasConfig::isValidPin)
-        val key = ClientCacheKey(host, pins)
+        val host = config.extractHost() ?: "100.101.127.39"
+        val effectivePins = config.certificatePins.ifEmpty { listOf(NasConfig.DEFAULT_PIN) }
+            .filter(NasConfig::isValidPin)
+        val key = ClientCacheKey(host, effectivePins)
 
         if (key == cachedKey && cachedRestClient != null && cachedSseClient != null) {
             return
@@ -87,14 +87,16 @@ class SecureOkHttpProvider @Inject constructor(
 
         val trustManager = PinnedCertTrustManager(
             systemTrustManager = defaultSystemTrustManager,
-            allowedPinsProvider = { configStorage.currentConfig.value.certificatePins }
+            allowedPinsProvider = {
+                configStorage.currentConfig.value.certificatePins.ifEmpty { listOf(NasConfig.DEFAULT_PIN) }
+            }
         )
 
         val sslContext = SSLContext.getInstance("TLS").apply {
             init(null, arrayOf(trustManager), null)
         }
 
-        val pinner = buildCertificatePinner(host, pins)
+        val pinner = buildCertificatePinner(host, effectivePins)
 
         val builder = OkHttpClient.Builder()
             .connectionSpecs(listOf(strictTlsSpec))
@@ -140,10 +142,6 @@ class SecureOkHttpProvider @Inject constructor(
         return builder.build()
     }
 
-    /**
-     * Utilitaire optionnel pour activer l'authentification mutuelle TLS (mTLS)
-     * à partir d'un certificat client PKCS#12 (.p12) protégé par mot de passe.
-     */
     fun applyMutualTls(
         builder: OkHttpClient.Builder,
         clientCertPkcs12: ByteArray,
@@ -166,14 +164,6 @@ class SecureOkHttpProvider @Inject constructor(
         return builder.sslSocketFactory(sslContext.socketFactory, trustManager)
     }
 
-    /**
-     * TrustManager intelligent :
-     * 1. Vérifie si le certificat est émis par une autorité reconnue par Android.
-     * 2. Si le certificat est auto-signé ou émis par une CA interne, vérifie si son
-     *    empreinte SPKI SHA-256 ou son empreinte de certificat SHA-256 correspond
-     *    à l'un des pins explicitement autorisés par l'utilisateur.
-     * 3. Rejette toute autre connexion.
-     */
     private class PinnedCertTrustManager(
         private val systemTrustManager: X509TrustManager,
         private val allowedPinsProvider: () -> List<String>
@@ -188,7 +178,6 @@ class SecureOkHttpProvider @Inject constructor(
                 throw CertificateException("Chaîne de certificats serveur vide ou absente.")
             }
 
-            // 1. Validation standard via les AC système
             try {
                 systemTrustManager.checkServerTrusted(chain, authType)
                 return
@@ -198,9 +187,8 @@ class SecureOkHttpProvider @Inject constructor(
                     throw systemException
                 }
 
-                // 2. Vérification cryptographique des empreintes autorisées
                 val pinMatched = chain.any { cert ->
-                    cert.checkValidity() // Rejette les certificats expirés ou pas encore valides
+                    cert.checkValidity()
                     val spkiB64 = computeSpkiPin(cert)
                     val certHex = computeCertSha256Hex(cert)
                     val certB64 = computeCertSha256Base64(cert)

@@ -150,6 +150,10 @@ fun ChatScreen(
                 // Corps de conversation ou écran d'accueil
                 if (!uiState.nasConfig.isConfigured) {
                     UnconfiguredNasPlaceholder(
+                        onQuickConnect = {
+                            onIntent(ChatIntent.SaveSettings(NasConfig()))
+                            onIntent(ChatIntent.RefreshSessions)
+                        },
                         onOpenSettings = { onIntent(ChatIntent.OpenSettings) }
                     )
                 } else if (activeSession == null || activeSession.messages.isEmpty()) {
@@ -380,6 +384,7 @@ private fun EmptyConversationPlaceholder(
 
 @Composable
 private fun UnconfiguredNasPlaceholder(
+    onQuickConnect: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     Box(
@@ -390,7 +395,7 @@ private fun UnconfiguredNasPlaceholder(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Icon(
                 imageVector = Icons.Rounded.Security,
@@ -399,20 +404,25 @@ private fun UnconfiguredNasPlaceholder(
                 modifier = Modifier.size(56.dp)
             )
             Text(
-                text = "Configurez la connexion HTTPS au NAS",
+                text = "Connexion Tailscale au NAS agy",
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "Vos identifiants et empreintes TLS sont chiffrés matériellement via Android Keystore (AES-256-GCM).",
+                text = "Connectez-vous automatiquement en 1 clic grâce à votre réseau privé sécurisé Tailscale.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            Button(onClick = onOpenSettings) {
-                Icon(Icons.Rounded.Settings, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Configurer le NAS")
+            Button(
+                onClick = onQuickConnect,
+                modifier = Modifier.fillMaxWidth(0.85f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("⚡ Se connecter au NAS")
+            }
+            TextButton(onClick = onOpenSettings) {
+                Text("Options de configuration manuelles")
             }
         }
     }

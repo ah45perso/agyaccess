@@ -11,7 +11,7 @@ import javax.inject.Singleton
 
 /**
  * Réécrit dynamiquement l'hôte cible de Retrofit avec l'URL HTTPS stockée
- * dans le Keystore matériel. Refuse systématiquement tout trafic non-HTTPS.
+ * dans le Keystore matériel ou l'URL Tailscale par défaut. Refuse systématiquement tout trafic non-HTTPS.
  */
 @Singleton
 class DynamicBaseUrlInterceptor @Inject constructor(
@@ -22,13 +22,8 @@ class DynamicBaseUrlInterceptor @Inject constructor(
         val originalRequest = chain.request()
         val config = configStorage.currentConfig.value
 
-        if (!NasConfig.isValidHttpsUrl(config.baseUrl)) {
-            throw IOException(
-                "URL du NAS non configurée ou non sécurisée (HTTPS obligatoire)."
-            )
-        }
-
         val targetBaseUrl = config.normalizedBaseUrl().toHttpUrlOrNull()
+            ?: NasConfig.DEFAULT_BASE_URL.toHttpUrlOrNull()
             ?: throw IOException("URL du NAS invalide.")
 
         if (!targetBaseUrl.isHttps) {
@@ -59,8 +54,9 @@ class DynamicBaseUrlInterceptor @Inject constructor(
 }
 
 /**
- * Injecte de façon transparente les en-têtes d'authentification (JWT / API Key +
- * éventuel en-tête d'authentification mutuelle) sans jamais exposer les secrets dans les logs.
+ * Injecte de façon transparente les en-têtes d'authentification lorsque configurés.
+ * Si l'accès s'effectue via Tailscale sans token, aucun en-tête Authorization n'est imposé,
+ * l'authentification étant vérifiée cryptographiquement par le réseau Tailscale.
  */
 @Singleton
 class AuthHeaderInterceptor @Inject constructor(
@@ -73,7 +69,7 @@ class AuthHeaderInterceptor @Inject constructor(
             .header("X-Client-App", "AgyAccess-Android")
 
         if (config.apiToken.isNotBlank()) {
-            builder.header("Authorization", "Bearer ${config.apiToken}")
+            builder.header("Authorization", "Bearer ${config.apiToken.trim()}")
         }
 
         if (config.mutualAuthHeaderName.isNotBlank() && config.mutualAuthHeaderValue.isNotBlank()) {
