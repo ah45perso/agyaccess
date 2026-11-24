@@ -60,4 +60,39 @@ class AgySseEventParserTest {
         assertTrue(err is StreamEvent.Error)
         assertEquals("RATE_LIMIT", (err as StreamEvent.Error).code)
     }
+
+    @Test
+    fun `parses agy bridge stream-json step_update agent_response`() {
+        val raw = """{"event":"step_update","step_update":{"state":"ACTIVE","step_type":"agent_response","text_delta":"Bonjour depuis agy"}}"""
+        val event = parser.parse("1", null, raw)
+        assertTrue(event is StreamEvent.Token)
+        val token = event as StreamEvent.Token
+        assertEquals("Bonjour depuis agy", token.text)
+    }
+
+    @Test
+    fun `parses agy bridge stream-json step_update tool_call`() {
+        val raw = """{"event":"step_update","step_update":{"state":"DONE","step_type":"tool_call","tool_name":"run_command","summary":"Exécution"}}"""
+        val event = parser.parse("2", null, raw)
+        assertTrue(event is StreamEvent.ToolCall)
+        val tool = event as StreamEvent.ToolCall
+        assertEquals("run_command", tool.toolName)
+        assertEquals(ToolCallStatus.SUCCESS, tool.toolStatus)
+    }
+
+    @Test
+    fun `parses agy bridge stream-json done event`() {
+        val raw = """{"event":"done","session_id":"5cfce9ab-186e-4112-a8d4-b3b24ea18277","status":"completed","returncode":0}"""
+        val event = parser.parse("3", null, raw)
+        assertTrue(event is StreamEvent.Done)
+        assertEquals("completed", (event as StreamEvent.Done).finishReason)
+    }
+
+    @Test
+    fun `parses agy bridge stream-json result event`() {
+        val raw = """{"event":"result","result":{"status":"SUCCESS","response":"Réponse finale complète"}}"""
+        val event = parser.parse("4", null, raw)
+        assertTrue(event is StreamEvent.Token)
+        assertEquals("Réponse finale complète", (event as StreamEvent.Token).text)
+    }
 }

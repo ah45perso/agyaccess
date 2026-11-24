@@ -1,5 +1,6 @@
 package com.agyaccess.app.data.remote.network
 
+import android.util.Base64
 import com.agyaccess.app.BuildConfig
 import com.agyaccess.app.data.security.SecureConfigStorage
 import com.agyaccess.app.domain.model.NasConfig
@@ -10,6 +11,9 @@ import okhttp3.TlsVersion
 import okhttp3.logging.HttpLoggingInterceptor
 import java.io.ByteArrayInputStream
 import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.cert.CertificateException
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,11 +27,12 @@ import javax.net.ssl.X509TrustManager
  *
  * Garanties de sécurité :
  * - Force TLS 1.3 / TLS 1.2 uniquement (`ConnectionSpec.MODERN_TLS`).
- * - Applique dynamiquement le **Certificate Pinning** (`sha256/...`) pour l'hôte NAS configuré.
- * - Partage le pool de connexions (`newBuilder()`) entre le client REST et le client SSE
- *   (ce dernier utilisant `readTimeout = 0` pour les flux temps réel persistants).
- * - Rédige (masque) `Authorization` et les en-têtes d'auth mutuelle même en build Debug.
- * - Fournit un utilitaire prêt à l'emploi pour le mTLS (certificat client PKCS#12).
+ * - Supporte le **Certificate Pinning** dynamique pour CA publique ou certificat auto-signé
+ *   sur réseau privé/Tailscale via un [PinnedCertTrustManager] inviolable.
+ * - Aucune régression permissive : le certificat serveur n'est JAMAIS accepté s'il ne provient
+ *   pas d'une CA système reconnue OU ne correspond pas exactement aux pins configurés par l'utilisateur.
+ * - Partage le pool de connexions (`newBuilder()`) entre le client REST et le client SSE.
+ * - Masque les en-têtes sensibles dans les logs.
  */
 @Singleton
 class SecureOkHttpProvider @Inject constructor(
@@ -44,26 +49,10 @@ class SecureOkHttpProvider @Inject constructor(
         .tlsVersions(TlsVersion.TLS_1_3, TlsVersion.TLS_1_2)
         .build()
 
-    private val baseClient: OkHttpClient by lazy {
-        val builder = OkHttpClient.Builder()
-            .connectionSpecs(listOf(strictTlsSpec))
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
-            .addInterceptor(dynamicBaseUrlInterceptor)
-            .addInterceptor(authHeaderInterceptor)
-
-        if (BuildConfig.DEBUG) {
-            val logger = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.HEADERS
-                redactHeader("Authorization")
-                redactHeader("Cookie")
-                redactHeader("X-Client-Cert-Token")
-            }
-            builder.addInterceptor(logger)
-        }
-        builder.build()
+    private val defaultSystemTrustManager: X509TrustManager by lazy {
+        val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+        tmf.init(null as KeyStore?)
+        tmf.trustManagers.filterIsInstance<X509TrustManager>().first()
     }
 
     @Volatile
@@ -96,14 +85,43 @@ class SecureOkHttpProvider @Inject constructor(
             return
         }
 
+        val trustManager = PinnedCertTrustManager(
+            systemTrustManager = defaultSystemTrustManager,
+            allowedPinsProvider = { configStorage.currentConfig.value.certificatePins }
+        )
+
+        val sslContext = SSLContext.getInstance("TLS").apply {
+            init(null, arrayOf(trustManager), null)
+        }
+
         val pinner = buildCertificatePinner(host, pins)
 
-        cachedRestClient = baseClient.newBuilder()
+        val builder = OkHttpClient.Builder()
+            .connectionSpecs(listOf(strictTlsSpec))
+            .sslSocketFactory(sslContext.socketFactory, trustManager)
             .certificatePinner(pinner)
-            .build()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .addInterceptor(dynamicBaseUrlInterceptor)
+            .addInterceptor(authHeaderInterceptor)
 
-        cachedSseClient = baseClient.newBuilder()
-            .certificatePinner(pinner)
+        if (BuildConfig.DEBUG) {
+            val logger = HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.HEADERS
+                redactHeader("Authorization")
+                redactHeader("Cookie")
+                redactHeader("X-Client-Cert-Token")
+            }
+            builder.addInterceptor(logger)
+        }
+
+        val base = builder.build()
+
+        cachedRestClient = base
+
+        cachedSseClient = base.newBuilder()
             .readTimeout(0, TimeUnit.MILLISECONDS) // Indispensable pour un flux SSE longue durée
             .pingInterval(25, TimeUnit.SECONDS)
             .build()
@@ -116,7 +134,9 @@ class SecureOkHttpProvider @Inject constructor(
             return CertificatePinner.DEFAULT
         }
         val builder = CertificatePinner.Builder()
-        pins.forEach { pin -> builder.add(host, pin) }
+        pins.mapNotNull(NasConfig::normalizeToOkHttpPin).forEach { okHttpPin ->
+            builder.add(host, okHttpPin)
+        }
         return builder.build()
     }
 
@@ -139,9 +159,89 @@ class SecureOkHttpProvider @Inject constructor(
             init(null as KeyStore?)
         }
         val trustManager = tmf.trustManagers.filterIsInstance<X509TrustManager>().first()
+
         val sslContext = SSLContext.getInstance("TLS").apply {
             init(kmf.keyManagers, arrayOf(trustManager), null)
         }
         return builder.sslSocketFactory(sslContext.socketFactory, trustManager)
+    }
+
+    /**
+     * TrustManager intelligent :
+     * 1. Vérifie si le certificat est émis par une autorité reconnue par Android.
+     * 2. Si le certificat est auto-signé ou émis par une CA interne, vérifie si son
+     *    empreinte SPKI SHA-256 ou son empreinte de certificat SHA-256 correspond
+     *    à l'un des pins explicitement autorisés par l'utilisateur.
+     * 3. Rejette toute autre connexion.
+     */
+    private class PinnedCertTrustManager(
+        private val systemTrustManager: X509TrustManager,
+        private val allowedPinsProvider: () -> List<String>
+    ) : X509TrustManager {
+
+        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+            systemTrustManager.checkClientTrusted(chain, authType)
+        }
+
+        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+            if (chain.isNullOrEmpty()) {
+                throw CertificateException("Chaîne de certificats serveur vide ou absente.")
+            }
+
+            // 1. Validation standard via les AC système
+            try {
+                systemTrustManager.checkServerTrusted(chain, authType)
+                return
+            } catch (systemException: CertificateException) {
+                val configuredPins = allowedPinsProvider()
+                if (configuredPins.isEmpty()) {
+                    throw systemException
+                }
+
+                // 2. Vérification cryptographique des empreintes autorisées
+                val pinMatched = chain.any { cert ->
+                    cert.checkValidity() // Rejette les certificats expirés ou pas encore valides
+                    val spkiB64 = computeSpkiPin(cert)
+                    val certHex = computeCertSha256Hex(cert)
+                    val certB64 = computeCertSha256Base64(cert)
+
+                    configuredPins.any { rawPin ->
+                        val pin = rawPin.trim()
+                        pin.equals(spkiB64, ignoreCase = true) ||
+                            pin.equals("sha256/$spkiB64", ignoreCase = true) ||
+                            pin.replace(":", "").equals(certHex.replace(":", ""), ignoreCase = true) ||
+                            pin.equals(certB64, ignoreCase = true)
+                    }
+                }
+
+                if (!pinMatched) {
+                    throw CertificateException(
+                        "Certificat serveur non approuvé : aucune empreinte SHA-256 ne correspond aux pins autorisés.",
+                        systemException
+                    )
+                }
+            }
+        }
+
+        override fun getAcceptedIssuers(): Array<X509Certificate> =
+            systemTrustManager.acceptedIssuers
+
+        private fun computeSpkiPin(cert: X509Certificate): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hash = digest.digest(cert.publicKey.encoded)
+            return Base64.encodeToString(hash, Base64.NO_WRAP)
+        }
+
+        private fun computeCertSha256Hex(cert: X509Certificate): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hash = digest.digest(cert.encoded)
+            return hash.joinToString("") { "%02x".format(it) }
+        }
+
+        private fun computeCertSha256Base64(cert: X509Certificate): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hash = digest.digest(cert.encoded)
+            return Base64.encodeToString(hash, Base64.NO_WRAP)
+        }
     }
 }

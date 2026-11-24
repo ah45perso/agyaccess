@@ -9,7 +9,7 @@ import java.net.URI
 data class NasConfig(
     val baseUrl: String = "",
     val apiToken: String = "",
-    /** Empreintes publiques TLS au format `sha256/BASE64...` (Certificate Pinning). */
+    /** Empreintes publiques TLS au format `sha256/BASE64...` ou hexadécimal (Certificate Pinning). */
     val certificatePins: List<String> = emptyList(),
     /** En-tête optionnel d'authentification mutuelle / reverse-proxy (ex: X-Client-Cert-Token). */
     val mutualAuthHeaderName: String = "",
@@ -30,7 +30,8 @@ data class NasConfig(
     }.getOrNull()
 
     companion object {
-        private val SHA256_PIN_REGEX = Regex("^sha256/[A-Za-z0-9+/=]{43,44}$")
+        private val SHA256_BASE64_PIN_REGEX = Regex("^(sha256/)?[A-Za-z0-9+/=]{43,44}$")
+        private val SHA256_HEX_PIN_REGEX = Regex("^(([0-9a-fA-F]{2}:){31}[0-9a-fA-F]{2}|[0-9a-fA-F]{64})$")
 
         /**
          * Impose strictement HTTPS et interdit toute URL malformée, identifiants
@@ -49,6 +50,20 @@ data class NasConfig(
             }.getOrDefault(false)
         }
 
-        fun isValidPin(pin: String): Boolean = SHA256_PIN_REGEX.matches(pin.trim())
+        fun isValidPin(pin: String): Boolean {
+            val trimmed = pin.trim()
+            return SHA256_BASE64_PIN_REGEX.matches(trimmed) || SHA256_HEX_PIN_REGEX.matches(trimmed)
+        }
+
+        /**
+         * Normalise une empreinte base64 au format requis par OkHttp CertificatePinner :
+         * `sha256/BASE64...`
+         */
+        fun normalizeToOkHttpPin(pin: String): String? {
+            val trimmed = pin.trim()
+            if (trimmed.startsWith("sha256/")) return trimmed
+            if (Regex("^[A-Za-z0-9+/=]{43,44}$").matches(trimmed)) return "sha256/$trimmed"
+            return null
+        }
     }
 }

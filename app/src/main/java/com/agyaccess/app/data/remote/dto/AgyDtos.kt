@@ -9,21 +9,38 @@ import kotlinx.serialization.Serializable
  */
 
 @Serializable
+data class HealthResponseDto(
+    @SerialName("status") val status: String = "ok",
+    @SerialName("host") val host: String = ""
+)
+
+@Serializable
 data class SessionsListResponseDto(
-    @SerialName("sessions") val sessions: List<SessionDto> = emptyList()
+    @SerialName("sessions") val sessions: List<SessionDto> = emptyList(),
+    @SerialName("count") val count: Int = 0
 )
 
 @Serializable
 data class SessionDto(
-    @SerialName("session_id") val sessionId: String,
+    @SerialName("session_id") val rawSessionId: String? = null,
+    @SerialName("id") val rawId: String? = null,
+    @SerialName("agy_conversation_id") val agyConversationId: String? = null,
     @SerialName("title") val title: String? = null,
     @SerialName("status") val status: String = "idle",
+    @SerialName("mode") val mode: String = "auto",
     @SerialName("archived") val archived: Boolean = false,
-    @SerialName("created_at") val createdAtEpochMs: Long? = null,
-    @SerialName("updated_at") val updatedAtEpochMs: Long? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("created_at_epoch_ms") val createdAtEpochMs: Long? = null,
+    @SerialName("updated_at_epoch_ms") val updatedAtEpochMs: Long? = null,
     @SerialName("active_model") val activeModel: String? = null,
+    @SerialName("last_prompt") val lastPrompt: String? = null,
+    @SerialName("events_count") val eventsCount: Int? = null,
     @SerialName("messages") val messages: List<MessageDto> = emptyList()
-)
+) {
+    val sessionId: String
+        get() = rawSessionId ?: rawId ?: ""
+}
 
 @Serializable
 data class MessageDto(
@@ -45,34 +62,46 @@ data class CreateSessionRequestDto(
 
 @Serializable
 data class CreateSessionResponseDto(
-    @SerialName("session_id") val sessionId: String,
+    @SerialName("session_id") val rawSessionId: String? = null,
+    @SerialName("id") val rawId: String? = null,
+    @SerialName("agy_conversation_id") val agyConversationId: String? = null,
     @SerialName("title") val title: String? = null,
     @SerialName("status") val status: String = "idle",
-    @SerialName("created_at") val createdAtEpochMs: Long? = null
-)
+    @SerialName("mode") val mode: String = "auto",
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("created_at_epoch_ms") val createdAtEpochMs: Long? = null
+) {
+    val sessionId: String
+        get() = rawSessionId ?: rawId ?: ""
+}
 
 /**
- * Payload exact requis pour `POST /api/v1/sessions/{session_id}/prompt` :
- * `{"prompt": "texte utilisateur", "model_override": "optional_string"}`
+ * Payload exact pour `POST /api/v1/sessions/{session_id}/prompt` :
+ * `{"prompt": "texte utilisateur", "mode": "auto"|"accept-edits"|"plan"}`
  */
 @Serializable
 data class PromptRequestDto(
     @SerialName("prompt") val prompt: String,
-    @SerialName("model_override") val modelOverride: String? = null
+    @SerialName("mode") val mode: String = "auto"
 )
 
 @Serializable
 data class PromptAcceptedResponseDto(
     @SerialName("accepted") val accepted: Boolean = true,
     @SerialName("session_id") val sessionId: String? = null,
-    @SerialName("status") val status: String = "running"
+    @SerialName("status") val status: String = "running",
+    @SerialName("mode") val mode: String? = null,
+    @SerialName("prompt") val prompt: String? = null
 )
 
 @Serializable
 data class CancelResponseDto(
     @SerialName("cancelled") val cancelled: Boolean = true,
     @SerialName("session_id") val sessionId: String? = null,
-    @SerialName("status") val status: String = "idle"
+    @SerialName("status") val status: String = "idle",
+    @SerialName("active") val active: Boolean = false,
+    @SerialName("signal") val signal: String? = null
 )
 
 // --- DTOs des événements SSE (`GET /api/v1/sessions/{session_id}/stream`) ---
@@ -103,7 +132,10 @@ data class SseToolCallPayloadDto(
 
 @Serializable
 data class SseDonePayloadDto(
-    @SerialName("finish_reason") val finishReason: String? = null
+    @SerialName("finish_reason") val finishReason: String? = null,
+    @SerialName("status") val status: String? = null,
+    @SerialName("session_id") val sessionId: String? = null,
+    @SerialName("returncode") val returncode: Int? = null
 )
 
 @Serializable

@@ -14,6 +14,8 @@ import com.agyaccess.app.domain.model.SessionRuntimeState
 import com.agyaccess.app.domain.model.SessionStatus
 import com.agyaccess.app.domain.repository.AgyRepository
 import kotlinx.coroutines.flow.StateFlow
+import java.time.Instant
+import java.time.OffsetDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,17 +46,19 @@ class AgyRepositoryImpl @Inject constructor(
 
     override suspend fun createSession(title: String?): Result<Session> = runCatching {
         val response = apiService.createSession(CreateSessionRequestDto(title = title))
-        require(Session.isValidSessionId(response.sessionId)) {
+        val sid = response.sessionId
+        require(Session.isValidSessionId(sid)) {
             "Le serveur NAS a retourné un session_id non conforme au format UUID."
         }
-        val now = response.createdAtEpochMs ?: System.currentTimeMillis()
+        val now = parseIsoOrEpoch(response.createdAt, response.createdAtEpochMs)
         val session = Session(
-            sessionId = response.sessionId,
+            sessionId = sid,
             title = response.title?.takeIf { it.isNotBlank() } ?: "Nouvelle conversation",
             status = response.status.toSessionStatus(),
             isArchived = false,
             createdAtEpochMs = now,
-            updatedAtEpochMs = now
+            updatedAtEpochMs = now,
+            activeModel = response.mode
         )
         coordinator.registerNewSession(session)
         session
@@ -69,8 +73,14 @@ class AgyRepositoryImpl @Inject constructor(
             return Result.failure(IllegalArgumentException("session_id UUID invalide."))
         }
 
+        val executionMode = when (modelOverride?.trim()?.lowercase()) {
+            "accept-edits" -> "accept-edits"
+            "plan" -> "plan"
+            else -> "auto"
+        }
+
         // 1. Mise à jour optimiste de la conversation
-        coordinator.appendOptimisticPrompt(sessionId, prompt, modelOverride)
+        coordinator.appendOptimisticPrompt(sessionId, prompt, executionMode)
 
         // 2. Ouvre d'abord le flux SSE pour ne manquer aucun token précoce
         coordinator.ensureStreamStarted(sessionId)
@@ -81,7 +91,7 @@ class AgyRepositoryImpl @Inject constructor(
                 sessionId = sessionId,
                 body = PromptRequestDto(
                     prompt = prompt,
-                    modelOverride = modelOverride
+                    mode = executionMode
                 )
             )
             Unit
@@ -89,7 +99,7 @@ class AgyRepositoryImpl @Inject constructor(
             coordinator.markPromptSubmissionFailed(
                 sessionId = sessionId,
                 errorMessage = throwable.localizedMessage
-                    ?: "Échec de l'envoi du prompt vers le NAS."
+                    ?: "Échec de l'envoi du prompt vers le serveur agy."
             )
         }
     }
@@ -100,39 +110,60 @@ class AgyRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun cancelSession(sessionId: String): Result<Unit> {
-        if (!Session.isValidSessionId(sessionId)) {
-            return Result.failure(IllegalArgumentException("session_id UUID invalide."))
-        }
-        coordinator.stopLocalStream(sessionId, markCancelled = true)
-        return runCatching {
+    override suspend fun cancelActiveTask(sessionId: String): Result<Unit> = runCatching {
+        if (Session.isValidSessionId(sessionId)) {
             apiService.cancelSession(sessionId)
-            Unit
+            coordinator.notifyCancelled(sessionId)
         }
-    }
-
-    override fun markSessionRead(sessionId: String) {
-        coordinator.setViewedSession(sessionId)
     }
 
     override fun toggleArchiveLocal(sessionId: String) {
-        coordinator.toggleArchive(sessionId)
+        if (Session.isValidSessionId(sessionId)) {
+            coordinator.toggleArchive(sessionId)
+        }
+    }
+
+    private fun parseIsoOrEpoch(isoString: String?, epochMs: Long?): Long {
+        if (epochMs != null && epochMs > 0) return epochMs
+        if (!isoString.isNullOrBlank()) {
+            try {
+                return Instant.parse(isoString).toEpochMilli()
+            } catch (_: Exception) {
+                try {
+                    return OffsetDateTime.parse(isoString).toInstant().toEpochMilli()
+                } catch (_: Exception) {}
+            }
+        }
+        return System.currentTimeMillis()
     }
 
     private fun SessionDto.toRuntimeState(): SessionRuntimeState {
-        val now = System.currentTimeMillis()
+        val created = parseIsoOrEpoch(createdAt, createdAtEpochMs)
+        val updated = parseIsoOrEpoch(updatedAt, updatedAtEpochMs ?: createdAtEpochMs)
+        val sid = sessionId
         val session = Session(
-            sessionId = sessionId,
-            title = title?.takeIf { it.isNotBlank() } ?: "Session ${sessionId.take(8)}",
+            sessionId = sid,
+            title = title?.takeIf { it.isNotBlank() } ?: "Session ${sid.take(8)}",
             status = status.toSessionStatus(),
             isArchived = archived,
-            createdAtEpochMs = createdAtEpochMs ?: now,
-            updatedAtEpochMs = updatedAtEpochMs ?: createdAtEpochMs ?: now,
-            activeModel = activeModel
+            createdAtEpochMs = created,
+            updatedAtEpochMs = updated,
+            activeModel = mode.takeIf { it.isNotBlank() } ?: activeModel
         )
+        val initialMessages = messages.map { it.toDomain() }.toMutableList()
+        if (initialMessages.isEmpty() && !lastPrompt.isNullOrBlank()) {
+            initialMessages.add(
+                ChatMessage.User(
+                    id = "last-prompt-$sid",
+                    timestampEpochMs = created,
+                    content = lastPrompt,
+                    modelOverride = mode
+                )
+            )
+        }
         return SessionRuntimeState(
             session = session,
-            messages = messages.map { it.toDomain() }
+            messages = initialMessages
         )
     }
 

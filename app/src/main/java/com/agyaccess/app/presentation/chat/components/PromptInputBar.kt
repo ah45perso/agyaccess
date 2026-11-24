@@ -38,12 +38,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-private val AVAILABLE_MODELS = listOf(
-    null to "Modèle par défaut (NAS)",
-    "claude-sonnet-4" to "claude-sonnet-4",
-    "gemini-2.5-pro" to "gemini-2.5-pro",
-    "qwen2.5-coder:32b" to "qwen2.5-coder:32b (Local)",
-    "llama3.3:70b" to "llama3.3:70b (Local)"
+private val AVAILABLE_MODES = listOf(
+    "auto" to "Mode Auto (Exécution & Édition)",
+    "accept-edits" to "Mode Accept Edits (Revue manuelle)",
+    "plan" to "Mode Plan (Analyse sans modification)"
 )
 
 @Composable
@@ -58,7 +56,13 @@ fun PromptInputBar(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var modelMenuExpanded by remember { mutableStateOf(false) }
+    var modeMenuExpanded by remember { mutableStateOf(false) }
+
+    val displayLabel = when (selectedModelOverride?.trim()?.lowercase()) {
+        "accept-edits" -> "Mode Accept Edits"
+        "plan" -> "Mode Plan"
+        else -> "Mode Auto"
+    }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -73,7 +77,7 @@ fun PromptInputBar(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Barre d'options : override de modèle & indicateur biométrique
+            // Barre d'options : mode agy & indicateur biométrique
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -81,10 +85,10 @@ fun PromptInputBar(
             ) {
                 Box {
                     AssistChip(
-                        onClick = { modelMenuExpanded = true },
+                        onClick = { modeMenuExpanded = true },
                         label = {
                             Text(
-                                text = selectedModelOverride ?: "Modèle par défaut",
+                                text = displayLabel,
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },
@@ -98,14 +102,14 @@ fun PromptInputBar(
                     )
 
                     DropdownMenu(
-                        expanded = modelMenuExpanded,
-                        onDismissRequest = { modelMenuExpanded = false }
+                        expanded = modeMenuExpanded,
+                        onDismissRequest = { modeMenuExpanded = false }
                     ) {
-                        AVAILABLE_MODELS.forEach { (value, label) ->
+                        AVAILABLE_MODES.forEach { (value, label) ->
                             DropdownMenuItem(
                                 text = { Text(label) },
                                 onClick = {
-                                    modelMenuExpanded = false
+                                    modeMenuExpanded = false
                                     onModelSelect(value)
                                 }
                             )

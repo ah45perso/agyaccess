@@ -83,8 +83,8 @@ fun SettingsDialog(
                 OutlinedTextField(
                     value = baseUrl,
                     onValueChange = { baseUrl = it },
-                    label = { Text("URL HTTPS du NAS *") },
-                    placeholder = { Text("https://agy.mon-nas.local:8443") },
+                    label = { Text("URL HTTPS du serveur agy *") },
+                    placeholder = { Text("https://100.101.127.39:8844") },
                     isError = baseUrl.isNotBlank() && !isUrlValid,
                     supportingText = {
                         if (baseUrl.isNotBlank() && !isUrlValid) {
@@ -123,15 +123,15 @@ fun SettingsDialog(
                 OutlinedTextField(
                     value = pinsText,
                     onValueChange = { pinsText = it },
-                    label = { Text("Certificate Pinning SHA-256 (optionnel)") },
-                    placeholder = { Text("sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=") },
+                    label = { Text("Certificate Pinning SHA-256 (recommandé pour IP/auto-signé)") },
+                    placeholder = { Text("sha256/kz0TBpW+fCDYd/Oou8RhYQnI8hqrw41D4HRqQSc1THQ=") },
                     isError = !arePinsValid,
                     supportingText = {
                         Text(
                             if (!arePinsValid) {
-                                "Format requis : sha256/BASE64 (1 empreinte par ligne)."
+                                "Format : sha256/BASE64 ou empreinte HEX (1 par ligne)."
                             } else {
-                                "1 empreinte par ligne. Laissez vide pour la validation TLS système."
+                                "1 empreinte par ligne. Requis pour le certificat auto-signé sur Tailscale."
                             }
                         )
                     },

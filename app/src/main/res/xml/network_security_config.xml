@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Configuration stricte de sécurité réseau :
+  Configuration stricte de sécurité réseau (OWASP Mobile Top 10) :
   - Interdit formellement tout trafic HTTP en clair (cleartextTrafficPermitted="false").
   - N'accepte par défaut que les autorités de certification système.
-  - Pour un NAS doté d'une CA privée auto-signée, ajoutez <certificates src="@raw/nas_root_ca"/>
-    dans <trust-anchors> pour le domaine spécifique du NAS et configurez les empreintes SHA-256
-    dans l'écran Paramètres (Certificate Pinning dynamique côté OkHttp) et/ou ci-dessous.
+  - Configuration de domaine dédiée pour le nœud Tailscale.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
@@ -14,18 +12,14 @@
         </trust-anchors>
     </base-config>
 
-    <!--
-      Exemple de configuration dédiée pour votre domaine NAS (décommentez et adaptez) :
-      <domain-config cleartextTrafficPermitted="false">
-          <domain includeSubdomains="false">agy.mon-nas.local</domain>
-          <trust-anchors>
-              <certificates src="system" />
-              <certificates src="@raw/nas_ca" />
-          </trust-anchors>
-          <pin-set expiration="2028-01-01">
-              <pin digest="SHA-256">BASE64_PRIMARY_PUBLIC_KEY_PIN_HERE=</pin>
-              <pin digest="SHA-256">BASE64_BACKUP_PUBLIC_KEY_PIN_HERE=</pin>
-          </pin-set>
-      </domain-config>
-    -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">ah-serv-opti.tail7f574d.ts.net</domain>
+        <domain includeSubdomains="false">ah-serv-opti</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <pin-set>
+            <pin digest="SHA-256">kz0TBpW+fCDYd/Oou8RhYQnI8hqrw41D4HRqQSc1THQ=</pin>
+        </pin-set>
+    </domain-config>
 </network-security-config>

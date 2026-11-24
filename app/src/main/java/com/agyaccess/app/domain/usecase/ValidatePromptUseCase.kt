@@ -51,9 +51,9 @@ class ValidatePromptUseCase @Inject constructor() {
         }
 
         val validatedModel = rawModelOverride?.trim()?.takeIf { it.isNotEmpty() }
-        if (validatedModel != null && !MODEL_NAME_REGEX.matches(validatedModel)) {
+        if (validatedModel != null && !isValidModeOrModel(validatedModel)) {
             return ValidationResult.Invalid(
-                "Nom de modèle invalide (caractères autorisés : a-z, A-Z, 0-9, ., _, -, :, /)."
+                "Mode ou modèle invalide (modes autorisés : auto, accept-edits, plan ; caractères autorisés : a-z, A-Z, 0-9, ., _, -, :, /)."
             )
         }
 
@@ -68,6 +68,11 @@ class ValidatePromptUseCase @Inject constructor() {
         )
     }
 
+    private fun isValidModeOrModel(value: String): Boolean {
+        if (ALLOWED_MODES.contains(value.lowercase())) return true
+        return MODEL_NAME_REGEX.matches(value)
+    }
+
     private fun isWellFormedUtf16(text: String): Boolean {
         var i = 0
         while (i < text.length) {
@@ -80,22 +85,24 @@ class ValidatePromptUseCase @Inject constructor() {
             } else if (Character.isLowSurrogate(c)) {
                 return false
             } else {
-                i += 1
+                i++
             }
         }
         return true
     }
 
     companion object {
-        const val MAX_PROMPT_LENGTH = 32_768
-        private val MODEL_NAME_REGEX = Regex("^[a-zA-Z0-9._:/-]{1,128}$")
+        const val MAX_PROMPT_LENGTH = 100_000
 
-        // Heuristique déclenchant la confirmation BiometricPrompt lorsque l'option est active
+        private val ALLOWED_MODES = setOf("auto", "accept-edits", "plan")
+        private val MODEL_NAME_REGEX = Regex("^[A-Za-z0-9._\\-:/]{1,64}$")
+
         private val SENSITIVE_INTENT_PATTERNS = listOf(
-            Regex("\\b(supprime|supprimer|efface|effacer|delete|remove|drop|truncate|purge|wipe)\\b", RegexOption.IGNORE_CASE),
-            Regex("\\b(red[ée]marre|reboot|shutdown|restart|stop|kill|deploy|d[ée]ploie)\\b", RegexOption.IGNORE_CASE),
-            Regex("\\b(mot de passe|password|token|secret|cl[ée] api|api key|credential|ssh|firewall|iptables|chmod|chown|sudo)\\b", RegexOption.IGNORE_CASE),
-            Regex("\\b(production|prod|backup|restore|restaure|format)\\b", RegexOption.IGNORE_CASE)
+            Regex("\\b(rm\\s+-rf|dd\\s+if=|mkfs|format|drop\\s+database|truncate\\s+table)\\b", RegexOption.IGNORE_CASE),
+            Regex("\\b(shutdown|reboot|poweroff|init\\s+0|halt)\\b", RegexOption.IGNORE_CASE),
+            Regex("\\b(iptables\\s+-F|ufw\\s+disable|setenforce\\s+0)\\b", RegexOption.IGNORE_CASE),
+            Regex("\\b(chmod\\s+-R\\s+777|chown\\s+-R)\\b", RegexOption.IGNORE_CASE),
+            Regex("\\b(supprime|efface|reinitialise|formate|arrete|eteins|redemarre)\\b", RegexOption.IGNORE_CASE)
         )
     }
 }

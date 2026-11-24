@@ -41,4 +41,16 @@ class ValidatePromptUseCaseTest {
         )
         assertTrue(result is ValidatePromptUseCase.ValidationResult.Invalid)
     }
+
+    @Test
+    fun `accepts standard agy execution modes`() {
+        for (mode in listOf("auto", "accept-edits", "plan")) {
+            val result = useCase(
+                rawPrompt = "Analyse ce code",
+                rawModelOverride = mode
+            )
+            assertTrue("Mode $mode should be valid", result is ValidatePromptUseCase.ValidationResult.Valid)
+            assertEquals(mode, (result as ValidatePromptUseCase.ValidationResult.Valid).prompt.modelOverride)
+        }
+    }
 }
