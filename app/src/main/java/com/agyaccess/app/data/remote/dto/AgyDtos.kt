@@ -104,6 +104,12 @@ data class CancelResponseDto(
     @SerialName("signal") val signal: String? = null
 )
 
+@Serializable
+data class DeleteSessionResponseDto(
+    @SerialName("deleted") val deleted: Boolean = true,
+    @SerialName("session_id") val sessionId: String? = null
+)
+
 // --- DTOs des événements SSE (`GET /api/v1/sessions/{session_id}/stream`) ---
 
 @Serializable

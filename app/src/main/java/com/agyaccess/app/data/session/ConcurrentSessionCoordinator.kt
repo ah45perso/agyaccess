@@ -101,6 +101,13 @@ class ConcurrentSessionCoordinator @Inject constructor(
         }
     }
 
+    fun removeSession(sessionId: String) {
+        stopLocalStream(sessionId, markCancelled = true)
+        _sessionsRuntime.update { current ->
+            current - sessionId
+        }
+    }
+
     /**
      * Prépare la session de façon optimiste : ajoute le message utilisateur et une bulle
      * assistant en streaming, puis met à jour le titre si la session était vierge.

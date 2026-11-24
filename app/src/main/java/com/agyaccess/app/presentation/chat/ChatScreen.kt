@@ -21,10 +21,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddComment
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SmartToy
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -44,7 +46,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -78,6 +84,31 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
     val activeSession = uiState.activeSession
+    var sessionToDelete by remember { mutableStateOf<String?>(null) }
+
+    if (sessionToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { sessionToDelete = null },
+            title = { Text("Supprimer la conversation") },
+            text = { Text("Voulez-vous vraiment supprimer définitivement cette conversation ?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val id = sessionToDelete ?: return@TextButton
+                        onIntent(ChatIntent.DeleteSession(id))
+                        sessionToDelete = null
+                    }
+                ) {
+                    Text("Supprimer", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { sessionToDelete = null }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -98,6 +129,10 @@ fun ChatScreen(
                     coroutineScope.launch { drawerState.close() }
                 },
                 onToggleArchive = { onIntent(ChatIntent.ToggleArchiveSession(it)) },
+                onDeleteSession = { sessionId ->
+                    sessionToDelete = sessionId
+                    coroutineScope.launch { drawerState.close() }
+                },
                 onRefresh = { onIntent(ChatIntent.RefreshSessions) },
                 onOpenSettings = {
                     coroutineScope.launch { drawerState.close() }
@@ -118,6 +153,7 @@ fun ChatScreen(
                     runningBackgroundCount = uiState.runningBackgroundCount,
                     onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
                     onCreateSession = { onIntent(ChatIntent.CreateNewSession) },
+                    onDeleteSession = { sessionToDelete = it },
                     onOpenSettings = { onIntent(ChatIntent.OpenSettings) }
                 )
             },
@@ -190,6 +226,7 @@ private fun ChatTopBar(
     runningBackgroundCount: Int,
     onOpenDrawer: () -> Unit,
     onCreateSession: () -> Unit,
+    onDeleteSession: (String) -> Unit,
     onOpenSettings: () -> Unit
 ) {
     TopAppBar(
@@ -241,6 +278,15 @@ private fun ChatTopBar(
             }
         },
         actions = {
+            if (activeSession != null) {
+                IconButton(onClick = { onDeleteSession(activeSession.session.sessionId) }) {
+                    Icon(
+                        imageVector = Icons.Rounded.DeleteForever,
+                        contentDescription = "Supprimer la conversation",
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
+                    )
+                }
+            }
             IconButton(onClick = onCreateSession) {
                 Icon(Icons.Rounded.AddComment, contentDescription = "Nouvelle session")
             }

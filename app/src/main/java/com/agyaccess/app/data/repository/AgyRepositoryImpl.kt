@@ -123,6 +123,14 @@ class AgyRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun deleteSession(sessionId: String): Result<Unit> = runCatching {
+        if (Session.isValidSessionId(sessionId)) {
+            coordinator.removeSession(sessionId)
+            runCatching { apiService.deleteSession(sessionId) }
+        }
+        Unit
+    }
+
     private fun parseIsoOrEpoch(isoString: String?, epochMs: Long?): Long {
         if (epochMs != null && epochMs > 0) return epochMs
         if (!isoString.isNullOrBlank()) {

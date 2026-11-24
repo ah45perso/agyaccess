@@ -51,6 +51,7 @@ sealed interface ChatIntent {
     data object CreateNewSession : ChatIntent
     data class SelectSession(val sessionId: String) : ChatIntent
     data class ToggleArchiveSession(val sessionId: String) : ChatIntent
+    data class DeleteSession(val sessionId: String) : ChatIntent
     data class UpdateDraft(val text: String) : ChatIntent
     data class SelectModelOverride(val model: String?) : ChatIntent
     data object SubmitPrompt : ChatIntent

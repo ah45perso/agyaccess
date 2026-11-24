@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
@@ -57,6 +58,7 @@ fun SessionDrawerContent(
     onCreateSession: () -> Unit,
     onSelectSession: (String) -> Unit,
     onToggleArchive: (String) -> Unit,
+    onDeleteSession: (String) -> Unit,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
     onLockApp: () -> Unit
@@ -156,7 +158,8 @@ fun SessionDrawerContent(
                             runtime = runtime,
                             selected = runtime.session.sessionId == selectedSessionId,
                             onClick = { onSelectSession(runtime.session.sessionId) },
-                            onToggleArchive = { onToggleArchive(runtime.session.sessionId) }
+                            onToggleArchive = { onToggleArchive(runtime.session.sessionId) },
+                            onDelete = { onDeleteSession(runtime.session.sessionId) }
                         )
                     }
                 }
@@ -174,7 +177,8 @@ fun SessionDrawerContent(
                             runtime = runtime,
                             selected = runtime.session.sessionId == selectedSessionId,
                             onClick = { onSelectSession(runtime.session.sessionId) },
-                            onToggleArchive = { onToggleArchive(runtime.session.sessionId) }
+                            onToggleArchive = { onToggleArchive(runtime.session.sessionId) },
+                            onDelete = { onDeleteSession(runtime.session.sessionId) }
                         )
                     }
                 }
@@ -219,7 +223,8 @@ private fun SessionDrawerRow(
     runtime: SessionRuntimeState,
     selected: Boolean,
     onClick: () -> Unit,
-    onToggleArchive: () -> Unit
+    onToggleArchive: () -> Unit,
+    onDelete: () -> Unit
 ) {
     NavigationDrawerItem(
         selected = selected,
@@ -267,20 +272,33 @@ private fun SessionDrawerRow(
             }
         },
         badge = {
-            IconButton(
-                onClick = onToggleArchive,
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(
-                    imageVector = if (runtime.session.isArchived) {
-                        Icons.Rounded.Unarchive
-                    } else {
-                        Icons.Rounded.Archive
-                    },
-                    contentDescription = if (runtime.session.isArchived) "Désarchiver" else "Archiver",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = onToggleArchive,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = if (runtime.session.isArchived) {
+                            Icons.Rounded.Unarchive
+                        } else {
+                            Icons.Rounded.Archive
+                        },
+                        contentDescription = if (runtime.session.isArchived) "Désarchiver" else "Archiver",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.DeleteForever,
+                        contentDescription = "Supprimer la conversation",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
+                    )
+                }
             }
         }
     )

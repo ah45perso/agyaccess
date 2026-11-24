@@ -91,6 +91,7 @@ class ChatViewModel @Inject constructor(
             is ChatIntent.CreateNewSession -> createNewSession()
             is ChatIntent.SelectSession -> selectSession(intent.sessionId)
             is ChatIntent.ToggleArchiveSession -> agyRepository.toggleArchiveLocal(intent.sessionId)
+            is ChatIntent.DeleteSession -> deleteSession(intent.sessionId)
             is ChatIntent.UpdateDraft -> updateDraft(intent.text)
             is ChatIntent.SelectModelOverride -> {
                 _uiState.update { it.copy(selectedModelOverride = intent.model) }
@@ -170,6 +171,18 @@ class ChatViewModel @Inject constructor(
     private fun selectSession(sessionId: String) {
         agyRepository.markSessionRead(sessionId)
         _uiState.update { it.copy(selectedSessionId = sessionId) }
+    }
+
+    private fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            if (_uiState.value.selectedSessionId == sessionId) {
+                val remaining = _uiState.value.sessions
+                    .map { it.session.sessionId }
+                    .filter { it != sessionId }
+                _uiState.update { it.copy(selectedSessionId = remaining.firstOrNull()) }
+            }
+            agyRepository.deleteSession(sessionId)
+        }
     }
 
     private fun updateDraft(text: String) {

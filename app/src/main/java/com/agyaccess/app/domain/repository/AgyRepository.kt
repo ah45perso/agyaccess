@@ -42,4 +42,7 @@ interface AgyRepository {
 
     /** Archive ou désarchive localement une session dans le tiroir. */
     fun toggleArchiveLocal(sessionId: String)
+
+    /** Supprime définitivement une session du NAS et de l'état local. */
+    suspend fun deleteSession(sessionId: String): Result<Unit>
 }

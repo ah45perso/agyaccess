@@ -3,12 +3,14 @@ package com.agyaccess.app.data.remote.api
 import com.agyaccess.app.data.remote.dto.CancelResponseDto
 import com.agyaccess.app.data.remote.dto.CreateSessionRequestDto
 import com.agyaccess.app.data.remote.dto.CreateSessionResponseDto
+import com.agyaccess.app.data.remote.dto.DeleteSessionResponseDto
 import com.agyaccess.app.data.remote.dto.HealthResponseDto
 import com.agyaccess.app.data.remote.dto.PromptAcceptedResponseDto
 import com.agyaccess.app.data.remote.dto.PromptRequestDto
 import com.agyaccess.app.data.remote.dto.SessionDto
 import com.agyaccess.app.data.remote.dto.SessionsListResponseDto
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -53,4 +55,10 @@ interface AgyApiService {
     suspend fun cancelSession(
         @Path("session_id") sessionId: String
     ): CancelResponseDto
+
+    /** 6. Supprime définitivement une session du NAS. */
+    @DELETE("api/v1/sessions/{session_id}")
+    suspend fun deleteSession(
+        @Path("session_id") sessionId: String
+    ): DeleteSessionResponseDto
 }
