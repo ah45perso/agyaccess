@@ -110,10 +110,17 @@ class AgyRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun cancelActiveTask(sessionId: String): Result<Unit> = runCatching {
+    override suspend fun cancelSession(sessionId: String): Result<Unit> = runCatching {
         if (Session.isValidSessionId(sessionId)) {
-            apiService.cancelSession(sessionId)
-            coordinator.notifyCancelled(sessionId)
+            coordinator.stopLocalStream(sessionId, markCancelled = true)
+            runCatching { apiService.cancelSession(sessionId) }
+        }
+        Unit
+    }
+
+    override fun markSessionRead(sessionId: String) {
+        if (Session.isValidSessionId(sessionId)) {
+            coordinator.markRead(sessionId)
         }
     }
 
