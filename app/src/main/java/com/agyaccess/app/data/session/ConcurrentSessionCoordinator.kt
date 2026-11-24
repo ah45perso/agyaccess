@@ -404,9 +404,15 @@ class ConcurrentSessionCoordinator @Inject constructor(
     ): List<ChatMessage> {
         val last = messages.lastOrNull()
         return if (last is ChatMessage.Assistant && last.isStreaming) {
+            val newContent = when {
+                last.content.isEmpty() -> token
+                token == last.content -> last.content
+                token.startsWith(last.content) -> token
+                else -> last.content + token
+            }
             messages.dropLast(1) + last.copy(
                 id = messageId ?: last.id,
-                content = last.content + token,
+                content = newContent,
                 timestampEpochMs = timestamp
             )
         } else {
