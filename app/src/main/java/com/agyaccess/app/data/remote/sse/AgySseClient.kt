@@ -77,7 +77,7 @@ class AgySseClient @Inject constructor(
                         signal.event.eventId?.let { lastEventId = it }
                         emit(signal)
                         when (signal.event) {
-                            is StreamEvent.Done -> completedNormally = true
+                            is StreamEvent.Done -> Unit
                             is StreamEvent.Error -> {
                                 if (!signal.event.recoverable) fatalError = true
                             }
@@ -157,7 +157,7 @@ class AgySseClient @Inject constructor(
             ) {
                 val parsed = parser.parse(id, type, data) ?: return
                 trySend(SseSignal.Event(parsed))
-                if (parsed is StreamEvent.Done || (parsed is StreamEvent.Error && !parsed.recoverable)) {
+                if (parsed is StreamEvent.Error && !parsed.recoverable) {
                     eventSource.cancel()
                     close()
                 }
